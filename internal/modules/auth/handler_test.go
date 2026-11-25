@@ -2,6 +2,8 @@ package auth_test
 
 import (
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,7 +18,8 @@ func setupAuthRouter() (*chi.Mux, *auth.TokenManager) {
 	repo := newMockRepo()
 	tm := auth.NewTokenManager("12345678901234567890123456789012", time.Hour)
 	svc := auth.NewService(repo, tm)
-	h := auth.NewHandler(svc)
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	h := auth.NewHandler(svc, log)
 
 	r := chi.NewRouter()
 	h.RegisterRoutes(r, tm)

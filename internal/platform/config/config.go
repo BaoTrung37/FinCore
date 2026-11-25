@@ -55,6 +55,9 @@ func Load() (*Config, error) {
 	if len(cfg.JWTSecret) < minJWTSecretLen {
 		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLen)
 	}
+	if cfg.JWTExpiration <= 0 {
+		return nil, errors.New("JWT_EXPIRATION must be positive")
+	}
 
 	return cfg, nil
 }

@@ -12,6 +12,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrUserInactive       = errors.New("user account is not active")
+	ErrPasswordTooLong    = errors.New("password must not exceed 72 bytes")
 )
 
 // Service implements authentication business logic.
@@ -28,6 +29,9 @@ func NewService(repo Repository, tm *TokenManager) *Service {
 // Register creates a new user with a bcrypt-hashed password and returns a JWT.
 func (s *Service) Register(ctx context.Context, email, password string) (AuthResponse, error) {
 	normalizedEmail := normalizeEmail(email)
+	if len(password) > 72 {
+		return AuthResponse{}, ErrPasswordTooLong
+	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -86,6 +90,9 @@ func (s *Service) GetProfile(ctx context.Context, userID string) (UserResponse, 
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return UserResponse{}, err
+	}
+	if user.Status != "active" {
+		return UserResponse{}, ErrUserInactive
 	}
 	return toUserResponse(user), nil
 }

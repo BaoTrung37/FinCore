@@ -42,3 +42,13 @@ func TestLoad_WeakJWTSecret(t *testing.T) {
 		t.Fatal("expected error for weak JWT_SECRET (< 32 chars)")
 	}
 }
+
+func TestLoad_NonPositiveJWTExpiration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/fincore")
+	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
+	t.Setenv("JWT_EXPIRATION", "0s")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("expected error for non-positive JWT_EXPIRATION")
+	}
+}

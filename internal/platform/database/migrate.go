@@ -18,8 +18,11 @@ func MigrateUp(connString string, migrationsFS fs.FS) error {
 	}
 
 	parsed, err := url.Parse(connString)
-	if err != nil || parsed.Scheme == "" {
-		return fmt.Errorf("invalid database url: %w", err)
+	if err != nil {
+		return errors.New("invalid database url")
+	}
+	if parsed.Scheme == "" {
+		return errors.New("invalid database url: missing scheme")
 	}
 	if parsed.Scheme == "postgres" || parsed.Scheme == "postgresql" {
 		parsed.Scheme = "pgx5"

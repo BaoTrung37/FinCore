@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -13,6 +14,9 @@ import (
 const maxBodyBytes = 1 << 20 // 1 MiB
 
 var validate = validator.New()
+
+// ErrRequestTooLarge indicates the request body exceeded maxBodyBytes.
+var ErrRequestTooLarge = errors.New("request body too large")
 
 // ErrorDetail represents a structured API error payload.
 type ErrorDetail struct {
@@ -43,24 +47,36 @@ func WriteError(w http.ResponseWriter, status int, code, message string) {
 }
 
 // DecodeAndValidate decodes a JSON request body into dst and runs struct validation.
-func DecodeAndValidate(r *http.Request, dst any) error {
+func DecodeAndValidate(w http.ResponseWriter, r *http.Request, dst any) error {
 	if r.Body == nil {
 		return errors.New("request body is empty")
 	}
 
-	limited := io.LimitReader(r.Body, maxBodyBytes)
-	dec := json.NewDecoder(limited)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
 	if err := dec.Decode(dst); err != nil {
-		return fmt.Errorf("invalid json: %w", err)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return ErrRequestTooLarge
+		}
+		return errors.New("malformed JSON payload")
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		return errors.New("request body must contain a single JSON object")
 	}
 
 	if err := validate.Struct(dst); err != nil {
-		return fmt.Errorf("validation failed: %w", err)
+		var valErrs validator.ValidationErrors
+		if errors.As(err, &valErrs) && len(valErrs) > 0 {
+			fields := make([]string, 0, len(valErrs))
+			for _, fe := range valErrs {
+				fields = append(fields, fmt.Sprintf("%s (%s)", strings.ToLower(fe.Field()), fe.Tag()))
+			}
+			return fmt.Errorf("validation failed: %s", strings.Join(fields, ", "))
+		}
+		return errors.New("validation failed")
 	}
 	return nil
 }

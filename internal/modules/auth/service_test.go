@@ -103,3 +103,37 @@ func TestService_Login_ValidInvalidInactive(t *testing.T) {
 		t.Fatalf("expected ErrUserInactive, got %v", err)
 	}
 }
+
+func TestService_Register_PasswordOver72Bytes(t *testing.T) {
+	repo := newMockRepo()
+	tm := auth.NewTokenManager("12345678901234567890123456789012", time.Hour)
+	svc := auth.NewService(repo, tm)
+
+	// 40 UTF-8 2-byte runes = 80 bytes > bcrypt's 72-byte limit.
+	longMultiByte := "éééééééééééééééééééééééééééééééééééééééé"
+	_, err := svc.Register(context.Background(), "multi@example.com", longMultiByte)
+	if !errors.Is(err, auth.ErrPasswordTooLong) {
+		t.Fatalf("expected ErrPasswordTooLong, got %v", err)
+	}
+}
+
+func TestService_GetProfile_InactiveUser(t *testing.T) {
+	repo := newMockRepo()
+	tm := auth.NewTokenManager("12345678901234567890123456789012", time.Hour)
+	svc := auth.NewService(repo, tm)
+
+	res, err := svc.Register(context.Background(), "charlie@example.com", "strongpass123")
+	if err != nil {
+		t.Fatalf("setup register failed: %v", err)
+	}
+
+	u := repo.usersByEmail["charlie@example.com"]
+	u.Status = "suspended"
+	repo.usersByEmail["charlie@example.com"] = u
+	repo.usersByID[u.ID] = u
+
+	_, err = svc.GetProfile(context.Background(), res.User.ID)
+	if !errors.Is(err, auth.ErrUserInactive) {
+		t.Fatalf("expected ErrUserInactive, got %v", err)
+	}
+}

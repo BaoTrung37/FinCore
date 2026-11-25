@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/BaoTrung37/FinCore/internal/platform/httpserver"
@@ -11,11 +13,15 @@ import (
 // Handler exposes HTTP endpoints for the auth module.
 type Handler struct {
 	svc *Service
+	log *slog.Logger
 }
 
 // NewHandler constructs an auth Handler.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, log *slog.Logger) *Handler {
+	if log == nil {
+		log = slog.New(slog.NewJSONHandler(io.Discard, nil))
+	}
+	return &Handler{svc: svc, log: log}
 }
 
 // RegisterRoutes mounts auth routes on the given chi router.
@@ -29,18 +35,26 @@ func (h *Handler) RegisterRoutes(r chi.Router, tm *TokenManager) {
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
-	if err := httpserver.DecodeAndValidate(r, &req); err != nil {
+	if err := httpserver.DecodeAndValidate(w, r, &req); err != nil {
+		if errors.Is(err, httpserver.ErrRequestTooLarge) {
+			httpserver.WriteError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", err.Error())
+			return
+		}
 		httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 		return
 	}
 
 	res, err := h.svc.Register(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, ErrEmailAlreadyExists) {
+		switch {
+		case errors.Is(err, ErrEmailAlreadyExists):
 			httpserver.WriteError(w, http.StatusConflict, "EMAIL_ALREADY_EXISTS", "email is already registered")
-			return
+		case errors.Is(err, ErrPasswordTooLong):
+			httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+		default:
+			h.log.Error("register failed", slog.Any("error", err))
+			httpserver.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to register user")
 		}
-		httpserver.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to register user")
 		return
 	}
 
@@ -49,7 +63,11 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if err := httpserver.DecodeAndValidate(r, &req); err != nil {
+	if err := httpserver.DecodeAndValidate(w, r, &req); err != nil {
+		if errors.Is(err, httpserver.ErrRequestTooLarge) {
+			httpserver.WriteError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", err.Error())
+			return
+		}
 		httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 		return
 	}
@@ -62,6 +80,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrUserInactive):
 			httpserver.WriteError(w, http.StatusForbidden, "USER_INACTIVE", "user account is not active")
 		default:
+			h.log.Error("login failed", slog.Any("error", err))
 			httpserver.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to login")
 		}
 		return
@@ -79,11 +98,15 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 
 	profile, err := h.svc.GetProfile(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, ErrUserNotFound) {
+		switch {
+		case errors.Is(err, ErrUserNotFound):
 			httpserver.WriteError(w, http.StatusNotFound, "USER_NOT_FOUND", "user not found")
-			return
+		case errors.Is(err, ErrUserInactive):
+			httpserver.WriteError(w, http.StatusForbidden, "USER_INACTIVE", "user account is not active")
+		default:
+			h.log.Error("get profile failed", slog.Any("error", err))
+			httpserver.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to load profile")
 		}
-		httpserver.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to load profile")
 		return
 	}
 

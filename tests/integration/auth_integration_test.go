@@ -47,7 +47,7 @@ func TestAuthFlow_Integration(t *testing.T) {
 	tm := auth.NewTokenManager("integration-test-secret-32-bytes!!", time.Hour)
 	repo := auth.NewPostgresRepository(pool)
 	svc := auth.NewService(repo, tm)
-	h := auth.NewHandler(svc)
+	h := auth.NewHandler(svc, log)
 
 	router := httpserver.NewRouter(log, pool)
 	h.RegisterRoutes(router, tm)

@@ -37,7 +37,10 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
+	initCtx, cancelInit := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelInit()
+
+	pool, err := database.NewPostgresPool(initCtx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -53,7 +56,7 @@ func run() error {
 	tm := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiration)
 	authRepo := auth.NewPostgresRepository(pool)
 	authSvc := auth.NewService(authRepo, tm)
-	authHandler := auth.NewHandler(authSvc)
+	authHandler := auth.NewHandler(authSvc, log)
 
 	router := httpserver.NewRouter(log, pool)
 	authHandler.RegisterRoutes(router, tm)

@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"io/fs"
+	"strings"
 	"testing"
 
 	"github.com/BaoTrung37/FinCore/internal/platform/database"
@@ -22,5 +23,8 @@ func TestMigrateUp_InvalidDSN(t *testing.T) {
 	err := database.MigrateUp("not-a-valid-dsn", migrations.FS)
 	if err == nil {
 		t.Fatal("expected error for invalid DSN")
+	}
+	if strings.Contains(err.Error(), "%!w") {
+		t.Fatalf("unexpected broken %%w format in error: %v", err)
 	}
 }

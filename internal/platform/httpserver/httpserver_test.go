@@ -44,9 +44,14 @@ func TestDecodeAndValidate_RejectsInvalidPayload(t *testing.T) {
 		Email string `json:"email" validate:"required,email"`
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"email":"bad"}`))
+	rec := httptest.NewRecorder()
 	var dst reqBody
-	if err := httpserver.DecodeAndValidate(req, &dst); err == nil {
+	err := httpserver.DecodeAndValidate(rec, req, &dst)
+	if err == nil {
 		t.Fatal("expected validation error")
+	}
+	if strings.Contains(err.Error(), "reqBody") {
+		t.Fatalf("error must not leak Go struct name: %v", err)
 	}
 }
 
