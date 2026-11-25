@@ -40,6 +40,20 @@ type LedgerTransaction struct {
 	CreatedAt       time.Time
 }
 
+type Transfer struct {
+	ID                   string
+	UserID               string
+	IdempotencyKey       string
+	RequestHash          string
+	SourceAccountID      string
+	DestinationAccountID string
+	Amount               int64
+	Currency             string
+	Status               string
+	LedgerTransactionID  string
+	CreatedAt            time.Time
+}
+
 type User struct {
 	ID           string
 	Email        string
