@@ -14,6 +14,7 @@ import (
 	accountdb "github.com/BaoTrung37/FinCore/internal/modules/account/db"
 	"github.com/BaoTrung37/FinCore/internal/modules/auth"
 	"github.com/BaoTrung37/FinCore/internal/modules/ledger"
+	"github.com/BaoTrung37/FinCore/internal/modules/payment"
 	"github.com/BaoTrung37/FinCore/internal/modules/transfer"
 	"github.com/BaoTrung37/FinCore/internal/platform/config"
 	"github.com/BaoTrung37/FinCore/internal/platform/database"
@@ -74,6 +75,10 @@ func run() error {
 	transferSvc := transfer.NewService(pool, accSvc, ledgerSvc)
 	transferHandler := transfer.NewHandler(transferSvc, log)
 	transferHandler.RegisterRoutes(router, tm)
+
+	paymentSvc := payment.NewService(pool, accSvc, ledgerSvc, payment.NewMockBankGateway())
+	paymentHandler := payment.NewHandler(paymentSvc, log, cfg.MockBankWebhookSecret)
+	paymentHandler.RegisterRoutes(router, tm)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,

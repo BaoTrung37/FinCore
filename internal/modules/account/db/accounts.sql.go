@@ -12,7 +12,7 @@ import (
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (user_id, account_number, currency)
 VALUES ($1, $2, $3)
-RETURNING id, user_id, account_number, currency, status, balance_amount, created_at, updated_at
+RETURNING id, user_id, account_number, currency, account_type, status, balance_amount, created_at, updated_at
 `
 
 type CreateAccountParams struct {
@@ -29,6 +29,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.UserID,
 		&i.AccountNumber,
 		&i.Currency,
+		&i.AccountType,
 		&i.Status,
 		&i.BalanceAmount,
 		&i.CreatedAt,
@@ -38,7 +39,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 }
 
 const getAccountByID = `-- name: GetAccountByID :one
-SELECT id, user_id, account_number, currency, status, balance_amount, created_at, updated_at
+SELECT id, user_id, account_number, currency, account_type, status, balance_amount, created_at, updated_at
 FROM accounts
 WHERE id = $1
 `
@@ -51,6 +52,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id string) (Account, error
 		&i.UserID,
 		&i.AccountNumber,
 		&i.Currency,
+		&i.AccountType,
 		&i.Status,
 		&i.BalanceAmount,
 		&i.CreatedAt,
@@ -60,7 +62,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id string) (Account, error
 }
 
 const getAccountsForUpdate = `-- name: GetAccountsForUpdate :many
-SELECT id, user_id, account_number, currency, status, balance_amount, created_at, updated_at
+SELECT id, user_id, account_number, currency, account_type, status, balance_amount, created_at, updated_at
 FROM accounts
 WHERE id = ANY($1::uuid[])
 ORDER BY id ASC
@@ -81,6 +83,7 @@ func (q *Queries) GetAccountsForUpdate(ctx context.Context, dollar_1 []string) (
 			&i.UserID,
 			&i.AccountNumber,
 			&i.Currency,
+			&i.AccountType,
 			&i.Status,
 			&i.BalanceAmount,
 			&i.CreatedAt,
@@ -96,8 +99,32 @@ func (q *Queries) GetAccountsForUpdate(ctx context.Context, dollar_1 []string) (
 	return items, nil
 }
 
+const getSettlementAccountByCurrency = `-- name: GetSettlementAccountByCurrency :one
+SELECT id, user_id, account_number, currency, account_type, status, balance_amount, created_at, updated_at
+FROM accounts
+WHERE account_type = 'settlement' AND currency = $1
+LIMIT 1
+`
+
+func (q *Queries) GetSettlementAccountByCurrency(ctx context.Context, currency string) (Account, error) {
+	row := q.db.QueryRow(ctx, getSettlementAccountByCurrency, currency)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.AccountNumber,
+		&i.Currency,
+		&i.AccountType,
+		&i.Status,
+		&i.BalanceAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listAccountsByUserID = `-- name: ListAccountsByUserID :many
-SELECT id, user_id, account_number, currency, status, balance_amount, created_at, updated_at
+SELECT id, user_id, account_number, currency, account_type, status, balance_amount, created_at, updated_at
 FROM accounts
 WHERE user_id = $1
 ORDER BY created_at DESC
@@ -117,6 +144,7 @@ func (q *Queries) ListAccountsByUserID(ctx context.Context, userID string) ([]Ac
 			&i.UserID,
 			&i.AccountNumber,
 			&i.Currency,
+			&i.AccountType,
 			&i.Status,
 			&i.BalanceAmount,
 			&i.CreatedAt,
@@ -136,7 +164,7 @@ const updateAccountBalance = `-- name: UpdateAccountBalance :one
 UPDATE accounts
 SET balance_amount = balance_amount + $2, updated_at = now()
 WHERE id = $1
-RETURNING id, user_id, account_number, currency, status, balance_amount, created_at, updated_at
+RETURNING id, user_id, account_number, currency, account_type, status, balance_amount, created_at, updated_at
 `
 
 type UpdateAccountBalanceParams struct {
@@ -152,6 +180,7 @@ func (q *Queries) UpdateAccountBalance(ctx context.Context, arg UpdateAccountBal
 		&i.UserID,
 		&i.AccountNumber,
 		&i.Currency,
+		&i.AccountType,
 		&i.Status,
 		&i.BalanceAmount,
 		&i.CreatedAt,
@@ -164,7 +193,7 @@ const updateAccountStatus = `-- name: UpdateAccountStatus :one
 UPDATE accounts
 SET status = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, user_id, account_number, currency, status, balance_amount, created_at, updated_at
+RETURNING id, user_id, account_number, currency, account_type, status, balance_amount, created_at, updated_at
 `
 
 type UpdateAccountStatusParams struct {
@@ -180,6 +209,7 @@ func (q *Queries) UpdateAccountStatus(ctx context.Context, arg UpdateAccountStat
 		&i.UserID,
 		&i.AccountNumber,
 		&i.Currency,
+		&i.AccountType,
 		&i.Status,
 		&i.BalanceAmount,
 		&i.CreatedAt,

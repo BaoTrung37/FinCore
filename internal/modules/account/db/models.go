@@ -15,6 +15,7 @@ type Account struct {
 	UserID        string
 	AccountNumber string
 	Currency      string
+	AccountType   string
 	Status        string
 	BalanceAmount int64
 	CreatedAt     time.Time

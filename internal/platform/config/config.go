@@ -14,13 +14,14 @@ const minJWTSecretLen = 32
 
 // Config holds runtime configuration for the FinCore API.
 type Config struct {
-	AppEnv        string
-	HTTPPort      string
-	DatabaseURL   string
-	JWTSecret     string
-	JWTExpiration time.Duration
-	LogLevel      string
-	AutoMigrate   bool
+	AppEnv                string
+	HTTPPort              string
+	DatabaseURL           string
+	JWTSecret             string
+	JWTExpiration         time.Duration
+	LogLevel              string
+	AutoMigrate           bool
+	MockBankWebhookSecret string
 }
 
 // Load reads configuration from environment variables (and an optional .env file).
@@ -40,13 +41,14 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		AppEnv:        getEnv("APP_ENV", "local"),
-		HTTPPort:      getEnv("HTTP_PORT", "8080"),
-		DatabaseURL:   os.Getenv("DATABASE_URL"),
-		JWTSecret:     os.Getenv("JWT_SECRET"),
-		JWTExpiration: jwtExp,
-		LogLevel:      getEnv("LOG_LEVEL", "info"),
-		AutoMigrate:   autoMigrate,
+		AppEnv:                getEnv("APP_ENV", "local"),
+		HTTPPort:              getEnv("HTTP_PORT", "8080"),
+		DatabaseURL:           os.Getenv("DATABASE_URL"),
+		JWTSecret:             os.Getenv("JWT_SECRET"),
+		JWTExpiration:         jwtExp,
+		LogLevel:              getEnv("LOG_LEVEL", "info"),
+		AutoMigrate:           autoMigrate,
+		MockBankWebhookSecret: os.Getenv("MOCK_BANK_WEBHOOK_SECRET"),
 	}
 
 	if cfg.DatabaseURL == "" {
