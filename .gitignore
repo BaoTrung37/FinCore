@@ -1,0 +1,16 @@
+# Local environment variables
+.env
+
+# Go
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# IDE
+.idea/
+.vscode/
+
+# macOS
+.DS_Store

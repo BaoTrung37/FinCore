@@ -1,0 +1,46 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/modules/account/queries"
+    gen:
+      go:
+        package: "accountdb"
+        out: "internal/modules/account/db"
+        sql_package: "pgx/v5"
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/modules/ledger/queries"
+    gen:
+      go:
+        package: "ledgerdb"
+        out: "internal/modules/ledger/db"
+        sql_package: "pgx/v5"
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/modules/transfer/queries"
+    gen:
+      go:
+        package: "transferdb"
+        out: "internal/modules/transfer/db"
+        sql_package: "pgx/v5"
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
