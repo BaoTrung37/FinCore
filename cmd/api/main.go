@@ -13,6 +13,8 @@ import (
 	"github.com/BaoTrung37/FinCore/internal/modules/account"
 	accountdb "github.com/BaoTrung37/FinCore/internal/modules/account/db"
 	"github.com/BaoTrung37/FinCore/internal/modules/auth"
+	"github.com/BaoTrung37/FinCore/internal/modules/ledger"
+	"github.com/BaoTrung37/FinCore/internal/modules/transfer"
 	"github.com/BaoTrung37/FinCore/internal/platform/config"
 	"github.com/BaoTrung37/FinCore/internal/platform/database"
 	"github.com/BaoTrung37/FinCore/internal/platform/httpserver"
@@ -63,9 +65,15 @@ func run() error {
 	router := httpserver.NewRouter(log, pool)
 	authHandler.RegisterRoutes(router, tm)
 
+	ledgerSvc := ledger.NewService(pool)
+
 	accSvc := account.NewService(accountdb.New(pool))
-	accHandler := account.NewHandler(accSvc, log)
+	accHandler := account.NewHandler(accSvc, log, ledgerSvc)
 	accHandler.RegisterRoutes(router, tm)
+
+	transferSvc := transfer.NewService(pool, accSvc, ledgerSvc)
+	transferHandler := transfer.NewHandler(transferSvc, log)
+	transferHandler.RegisterRoutes(router, tm)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,

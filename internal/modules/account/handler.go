@@ -1,16 +1,24 @@
 package account
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	accountdb "github.com/BaoTrung37/FinCore/internal/modules/account/db"
 	"github.com/BaoTrung37/FinCore/internal/modules/auth"
+	ledgerdb "github.com/BaoTrung37/FinCore/internal/modules/ledger/db"
 	"github.com/BaoTrung37/FinCore/internal/platform/httpserver"
 	"github.com/go-chi/chi/v5"
 )
+
+// TransactionLister reads paginated ledger entries for an account.
+type TransactionLister interface {
+	ListAccountEntries(ctx context.Context, accountID string, limit, offset int32) ([]ledgerdb.LedgerEntry, error)
+}
 
 type createAccountRequest struct {
 	Currency string `json:"currency" validate:"required,len=3"`
@@ -18,16 +26,21 @@ type createAccountRequest struct {
 
 // Handler exposes HTTP endpoints for the account module.
 type Handler struct {
-	svc *Service
-	log *slog.Logger
+	svc    *Service
+	log    *slog.Logger
+	lister TransactionLister
 }
 
 // NewHandler constructs an account Handler.
-func NewHandler(svc *Service, log *slog.Logger) *Handler {
+func NewHandler(svc *Service, log *slog.Logger, opts ...TransactionLister) *Handler {
 	if log == nil {
 		log = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
-	return &Handler{svc: svc, log: log}
+	var lister TransactionLister
+	if len(opts) > 0 {
+		lister = opts[0]
+	}
+	return &Handler{svc: svc, log: log, lister: lister}
 }
 
 // RegisterRoutes mounts protected account routes under /api/v1/accounts.
@@ -40,6 +53,7 @@ func (h *Handler) RegisterRoutes(r chi.Router, tm *auth.TokenManager) {
 		r.Post("/{id}/freeze", h.freeze)
 		r.Post("/{id}/unfreeze", h.unfreeze)
 		r.Get("/{id}/balance", h.balance)
+		r.Get("/{id}/transactions", h.transactions)
 	})
 }
 
@@ -151,6 +165,37 @@ func (h *Handler) balance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpserver.WriteJSON(w, http.StatusOK, bal)
+}
+
+func (h *Handler) transactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		httpserver.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authenticated user")
+		return
+	}
+
+	acc, err := h.svc.GetAccount(r.Context(), userID, chi.URLParam(r, "id"))
+	if err != nil {
+		h.handleAccountError(w, err, "get account for transactions failed")
+		return
+	}
+	if h.lister == nil {
+		httpserver.WriteJSON(w, http.StatusOK, []ledgerdb.LedgerEntry{})
+		return
+	}
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	entries, err := h.lister.ListAccountEntries(r.Context(), acc.ID, int32(limit), int32(offset))
+	if err != nil {
+		h.log.Error("list account transactions failed", slog.Any("error", err))
+		httpserver.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to load transactions")
+		return
+	}
+	if entries == nil {
+		entries = []ledgerdb.LedgerEntry{}
+	}
+	httpserver.WriteJSON(w, http.StatusOK, entries)
 }
 
 func (h *Handler) handleAccountError(w http.ResponseWriter, err error, logMsg string) {

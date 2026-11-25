@@ -100,6 +100,33 @@ func (s *Service) PostTransaction(ctx context.Context, in PostTransactionInput) 
 	return ltx, entries, nil
 }
 
+// PostInTx records a balanced ledger transaction inside an existing pgx.Tx.
+func (s *Service) PostInTx(ctx context.Context, tx pgx.Tx, in PostTransactionInput) (ledgerdb.LedgerTransaction, []ledgerdb.LedgerEntry, error) {
+	txCurrency, err := validateInput(in)
+	if err != nil {
+		return ledgerdb.LedgerTransaction{}, nil, err
+	}
+	return s.postInTx(ctx, tx, in, txCurrency, pgtype.UUID{})
+}
+
+// ListAccountEntries returns paginated ledger entries for an account.
+func (s *Service) ListAccountEntries(ctx context.Context, accountID string, limit, offset int32) ([]ledgerdb.LedgerEntry, error) {
+	if s.pool == nil {
+		return nil, errors.New("database pool is not configured")
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return ledgerdb.New(s.pool).ListEntriesByAccountID(ctx, ledgerdb.ListEntriesByAccountIDParams{
+		AccountID: accountID,
+		Limit:     limit,
+		Offset:    offset,
+	})
+}
+
 // ReverseTransaction creates an opposing ledger transaction and marks the original as reversed.
 func (s *Service) ReverseTransaction(ctx context.Context, txID, reference string) (ledgerdb.LedgerTransaction, []ledgerdb.LedgerEntry, error) {
 	if strings.TrimSpace(reference) == "" {
