@@ -29,3 +29,18 @@ sql:
             go_type: "string"
           - db_type: "timestamptz"
             go_type: "time.Time"
+
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/modules/transfer/queries"
+    gen:
+      go:
+        package: "transferdb"
+        out: "internal/modules/transfer/db"
+        sql_package: "pgx/v5"
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
