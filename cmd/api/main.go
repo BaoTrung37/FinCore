@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BaoTrung37/FinCore/internal/modules/account"
+	accountdb "github.com/BaoTrung37/FinCore/internal/modules/account/db"
 	"github.com/BaoTrung37/FinCore/internal/modules/auth"
 	"github.com/BaoTrung37/FinCore/internal/platform/config"
 	"github.com/BaoTrung37/FinCore/internal/platform/database"
@@ -60,6 +62,10 @@ func run() error {
 
 	router := httpserver.NewRouter(log, pool)
 	authHandler.RegisterRoutes(router, tm)
+
+	accSvc := account.NewService(accountdb.New(pool))
+	accHandler := account.NewHandler(accSvc, log)
+	accHandler.RegisterRoutes(router, tm)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
