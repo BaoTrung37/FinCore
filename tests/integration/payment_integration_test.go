@@ -61,12 +61,12 @@ func TestPayment_DepositWithdrawalCallbackAndIdempotency_Integration(t *testing.
 	if err != nil {
 		t.Fatalf("register user: %v", err)
 	}
-	tok, err := tm.Generate(user.ID, user.Email)
+	tok, err := tm.Generate(user.User.ID, user.User.Email)
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
 
-	acc, err := accSvc.CreateAccount(context.Background(), user.ID, "VND")
+	acc, err := accSvc.CreateAccount(context.Background(), user.User.ID, "VND")
 	if err != nil {
 		t.Fatalf("create account: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestPayment_DepositWithdrawalCallbackAndIdempotency_Integration(t *testing.
 		t.Fatalf("expected 200 on callback, got %d (%s)", recCB.Code, recCB.Body.String())
 	}
 
-	bal, err := accSvc.GetBalance(context.Background(), user.ID, acc.ID)
+	bal, err := accSvc.GetBalance(context.Background(), user.User.ID, acc.ID)
 	if err != nil {
 		t.Fatalf("get balance: %v", err)
 	}
