@@ -109,6 +109,22 @@ func (s *Service) GetBalance(ctx context.Context, userID, accountID string) (Bal
 	}, nil
 }
 
+// GetSettlementAccountByCurrency returns the system settlement account for the given currency.
+func (s *Service) GetSettlementAccountByCurrency(ctx context.Context, currency string) (accountdb.Account, error) {
+	curr := strings.ToUpper(strings.TrimSpace(currency))
+	if curr != "VND" && curr != "USD" {
+		return accountdb.Account{}, ErrUnsupportedCurrency
+	}
+	acc, err := s.q.GetSettlementAccountByCurrency(ctx, curr)
+	if err != nil {
+		if isNotFoundOrBadUUID(err) {
+			return accountdb.Account{}, ErrAccountNotFound
+		}
+		return accountdb.Account{}, fmt.Errorf("get settlement account: %w", err)
+	}
+	return acc, nil
+}
+
 func (s *Service) setStatus(ctx context.Context, userID, accountID, status string) (accountdb.Account, error) {
 	acc, err := s.GetAccount(ctx, userID, accountID)
 	if err != nil {

@@ -250,7 +250,7 @@ func (s *Service) postInTx(
 	}
 
 	for _, id := range sortedIDs {
-		if accMap[id].BalanceAmount+deltas[id] < 0 {
+		if accMap[id].AccountType != "settlement" && accMap[id].BalanceAmount+deltas[id] < 0 {
 			return ledgerdb.LedgerTransaction{}, nil, ErrInsufficientBalance
 		}
 	}

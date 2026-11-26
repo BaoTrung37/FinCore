@@ -1,12 +1,15 @@
 {
   "info": {
-    "name": "FinCore API (M1 + M2)",
+    "name": "FinCore API (M1 - M4)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "base_url", "value": "http://localhost:8080" },
     { "key": "access_token", "value": "" },
-    { "key": "account_id", "value": "" }
+    { "key": "account_id", "value": "" },
+    { "key": "destination_account_id", "value": "" },
+    { "key": "transfer_id", "value": "" },
+    { "key": "payment_id", "value": "" }
   ],
   "item": [
     {
@@ -156,6 +159,124 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}/balance"
+          }
+        },
+        {
+          "name": "Get Transactions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/transactions?limit=20&offset=0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transfers (M3)",
+      "item": [
+        {
+          "name": "Create Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('transfer_id', data.id || data.ID);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_account_id\": \"{{account_id}}\",\n  \"destination_account_id\": \"{{destination_account_id}}\",\n  \"amount\": 100000,\n  \"currency\": \"VND\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/transfers"
+          }
+        },
+        {
+          "name": "Get Transfer",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": "{{base_url}}/api/v1/transfers/{{transfer_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments (M4)",
+      "item": [
+        {
+          "name": "Initiate Deposit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('payment_id', data.id || data.ID);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account_id\": \"{{account_id}}\",\n  \"amount\": 500000,\n  \"currency\": \"VND\",\n  \"bank_code\": \"MOCK_VCB\",\n  \"bank_account_number\": \"1234567890\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/payments/deposits"
+          }
+        },
+        {
+          "name": "Initiate Withdrawal",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account_id\": \"{{account_id}}\",\n  \"amount\": 150000,\n  \"currency\": \"VND\",\n  \"bank_code\": \"MOCK_VCB\",\n  \"bank_account_number\": \"1234567890\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/payments/withdrawals"
+          }
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": "{{base_url}}/api/v1/payments?limit=20&offset=0"
+          }
+        },
+        {
+          "name": "Get Payment",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": "{{base_url}}/api/v1/payments/{{payment_id}}"
           }
         }
       ]

@@ -12,6 +12,7 @@ type Querier interface {
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	GetAccountByID(ctx context.Context, id string) (Account, error)
 	GetAccountsForUpdate(ctx context.Context, dollar_1 []string) ([]Account, error)
+	GetSettlementAccountByCurrency(ctx context.Context, currency string) (Account, error)
 	ListAccountsByUserID(ctx context.Context, userID string) ([]Account, error)
 	UpdateAccountBalance(ctx context.Context, arg UpdateAccountBalanceParams) (Account, error)
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) (Account, error)

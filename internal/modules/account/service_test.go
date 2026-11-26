@@ -85,6 +85,15 @@ func (m *mockAccountQuerier) UpdateAccountStatus(_ context.Context, arg accountd
 	return acc, nil
 }
 
+func (m *mockAccountQuerier) GetSettlementAccountByCurrency(_ context.Context, currency string) (accountdb.Account, error) {
+	for _, acc := range m.accounts {
+		if acc.Currency == currency {
+			return acc, nil
+		}
+	}
+	return accountdb.Account{}, pgx.ErrNoRows
+}
+
 func TestService_CreateAndOwnershipAndFreeze(t *testing.T) {
 	q := newMockQuerier()
 	svc := account.NewService(q)

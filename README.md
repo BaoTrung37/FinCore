@@ -9,35 +9,27 @@ Modular Monolith banking backend in Go (`net/http` + `chi`, PostgreSQL 17, `pgxp
 
 ## Quick Start
 
-1. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+# First-time setup on a new machine (.env, Go modules, sqlc, PostgreSQL)
+make setup
 
-2. **Start PostgreSQL:**
-   ```bash
-   docker compose up -d
-   ```
+# Start PostgreSQL (if not running) and run the API server
+make dev
+```
 
-3. **Run API server** (embedded SQL migrations run automatically when `AUTO_MIGRATE=true`):
-   ```bash
-   go run ./cmd/api
-   ```
-
-4. **Verify health:**
-   ```bash
-   curl -i http://localhost:8080/healthz
-   ```
+Verify health:
+```bash
+curl -i http://localhost:8080/healthz
+```
 
 ## Running Tests
 
 ```bash
 # Unit tests (no database required)
-go test -race ./...
+make test
 
-# Integration tests (requires running PostgreSQL; skips cleanly if unreachable)
-TEST_DATABASE_URL="postgres://fincore_app:local_dev_password@localhost:5432/fincore?sslmode=disable" \
-  go test -race -v ./tests/integration/...
+# Integration tests (starts PostgreSQL via Docker Compose)
+make test-integration
 ```
 
 ## Implemented Milestones
@@ -48,3 +40,11 @@ TEST_DATABASE_URL="postgres://fincore_app:local_dev_password@localhost:5432/finc
   - `pgxpool` connection pool + embedded SQL migrations (`users`)
   - `chi` HTTP server, `http.MaxBytesReader`, `/healthz`, graceful shutdown
   - Auth module (`POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`)
+- **M2 — Account & Double-Entry Ledger (`feat/m2-account-ledger`):**
+  - Account lifecycle (`POST /api/v1/accounts`, `GET /api/v1/accounts`, `GET /api/v1/accounts/{id}`, `freeze`, `unfreeze`, `balance`, `transactions`)
+  - Append-only double-entry ledger (`ledger_transactions`, `ledger_entries`) with `SUM(debit) == SUM(credit)` and reversal support
+- **M3 — Transfer Engine (`feat/m3-transfer-engine`):**
+  - Atomic idempotent internal transfers (`POST /api/v1/transfers`, `GET /api/v1/transfers/{id}`) with ascending `account_id` row locking
+- **M4 — Payments & Mock Bank Gateway (`feat/m4-payments`):**
+  - Deposits & withdrawals (`POST /api/v1/payments/deposits`, `POST /api/v1/payments/withdrawals`, `GET /api/v1/payments`, `GET /api/v1/payments/{id}`)
+  - Signed mock bank callback webhook (`POST /api/v1/payments/callbacks/mock-bank`)
