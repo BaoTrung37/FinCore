@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -22,6 +23,9 @@ type Config struct {
 	LogLevel              string
 	AutoMigrate           bool
 	MockBankWebhookSecret string
+	CORSAllowedOrigins    []string
+	RateLimitRPS          float64
+	RateLimitBurst        int
 }
 
 // Load reads configuration from environment variables (and an optional .env file).
@@ -40,6 +44,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	rateLimitRPS, err := parseFloatEnv("RATE_LIMIT_RPS", 100)
+	if err != nil {
+		return nil, err
+	}
+	rateLimitBurst, err := parseIntEnv("RATE_LIMIT_BURST", 200)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		AppEnv:                getEnv("APP_ENV", "local"),
 		HTTPPort:              getEnv("HTTP_PORT", "8080"),
@@ -49,6 +62,9 @@ func Load() (*Config, error) {
 		LogLevel:              getEnv("LOG_LEVEL", "info"),
 		AutoMigrate:           autoMigrate,
 		MockBankWebhookSecret: os.Getenv("MOCK_BANK_WEBHOOK_SECRET"),
+		CORSAllowedOrigins:    parseCSVEnv("CORS_ALLOWED_ORIGINS", []string{"*"}),
+		RateLimitRPS:          rateLimitRPS,
+		RateLimitBurst:        rateLimitBurst,
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -93,4 +109,46 @@ func parseBoolEnv(key string, fallback bool) (bool, error) {
 		return false, fmt.Errorf("parse %s: %w", key, err)
 	}
 	return b, nil
+}
+
+func parseFloatEnv(key string, fallback float64) (float64, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", key, err)
+	}
+	return f, nil
+}
+
+func parseIntEnv(key string, fallback int) (int, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", key, err)
+	}
+	return n, nil
+}
+
+func parseCSVEnv(key string, fallback []string) []string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return fallback
+	}
+	return out
 }

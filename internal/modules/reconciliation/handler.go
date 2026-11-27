@@ -20,7 +20,7 @@ const maxCSVUploadBytes = 1 << 20 // 1 MiB
 
 type createRunRequest struct {
 	BankCode    string                `json:"bank_code" validate:"required"`
-	Currency    string                `json:"currency" validate:"required,oneof=VND USD"`
+	Currency    string                `json:"currency" validate:"required"`
 	PeriodStart time.Time             `json:"period_start" validate:"required"`
 	PeriodEnd   time.Time             `json:"period_end" validate:"required"`
 	Records     []BankStatementRecord `json:"records"`
@@ -32,18 +32,22 @@ type resolveItemRequest struct {
 }
 
 type runResponse struct {
-	ID                   string         `json:"id"`
-	BankCode             string         `json:"bank_code"`
-	Currency             string         `json:"currency"`
-	PeriodStart          time.Time      `json:"period_start"`
-	PeriodEnd            time.Time      `json:"period_end"`
-	Status               string         `json:"status"`
-	TotalBankRecords     int32          `json:"total_bank_records"`
-	TotalInternalRecords int32          `json:"total_internal_records"`
-	MatchedCount         int32          `json:"matched_count"`
-	DiscrepancyCount     int32          `json:"discrepancy_count"`
-	CreatedAt            time.Time      `json:"created_at"`
-	Items                []itemResponse `json:"items,omitempty"`
+	ID                   string    `json:"id"`
+	BankCode             string    `json:"bank_code"`
+	Currency             string    `json:"currency"`
+	PeriodStart          time.Time `json:"period_start"`
+	PeriodEnd            time.Time `json:"period_end"`
+	Status               string    `json:"status"`
+	TotalBankRecords     int32     `json:"total_bank_records"`
+	TotalInternalRecords int32     `json:"total_internal_records"`
+	MatchedCount         int32     `json:"matched_count"`
+	DiscrepancyCount     int32     `json:"discrepancy_count"`
+	CreatedAt            time.Time `json:"created_at"`
+}
+
+type runDetailResponse struct {
+	runResponse
+	Items []itemResponse `json:"items"`
 }
 
 type itemResponse struct {
@@ -85,6 +89,9 @@ type Handler struct {
 
 // NewHandler constructs a reconciliation Handler.
 func NewHandler(svc *Service, log *slog.Logger) *Handler {
+	if log == nil {
+		log = slog.Default()
+	}
 	return &Handler{svc: svc, log: log}
 }
 
@@ -132,7 +139,7 @@ func (h *Handler) createRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpserver.WriteJSON(w, http.StatusCreated, toRunResponse(res.Run, res.Items))
+	httpserver.WriteJSON(w, http.StatusCreated, toRunDetailResponse(res.Run, res.Items))
 }
 
 func (h *Handler) createRunCSV(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +161,15 @@ func (h *Handler) createRunCSV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bankCode := strings.TrimSpace(r.FormValue("bank_code"))
-	currency := strings.TrimSpace(r.FormValue("currency"))
+	if bankCode == "" {
+		httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", ErrInvalidBankCode.Error())
+		return
+	}
+	currency := strings.ToUpper(strings.TrimSpace(r.FormValue("currency")))
+	if currency != "VND" && currency != "USD" {
+		httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", ErrUnsupportedCurrency.Error())
+		return
+	}
 	periodStart, err := time.Parse(time.RFC3339, strings.TrimSpace(r.FormValue("period_start")))
 	if err != nil {
 		httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "period_start must be valid RFC3339 timestamp")
@@ -163,6 +178,10 @@ func (h *Handler) createRunCSV(w http.ResponseWriter, r *http.Request) {
 	periodEnd, err := time.Parse(time.RFC3339, strings.TrimSpace(r.FormValue("period_end")))
 	if err != nil {
 		httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "period_end must be valid RFC3339 timestamp")
+		return
+	}
+	if periodEnd.Before(periodStart) {
+		httpserver.WriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", ErrInvalidPeriod.Error())
 		return
 	}
 
@@ -192,7 +211,7 @@ func (h *Handler) createRunCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpserver.WriteJSON(w, http.StatusCreated, toRunResponse(res.Run, res.Items))
+	httpserver.WriteJSON(w, http.StatusCreated, toRunDetailResponse(res.Run, res.Items))
 }
 
 func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +231,7 @@ func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]runResponse, 0, len(runs))
 	for _, run := range runs {
-		resp = append(resp, toRunResponse(run, nil))
+		resp = append(resp, toRunResponse(run))
 	}
 	httpserver.WriteJSON(w, http.StatusOK, resp)
 }
@@ -236,7 +255,7 @@ func (h *Handler) getRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpserver.WriteJSON(w, http.StatusOK, toRunResponse(res.Run, res.Items))
+	httpserver.WriteJSON(w, http.StatusOK, toRunDetailResponse(res.Run, res.Items))
 }
 
 func (h *Handler) resolveItem(w http.ResponseWriter, r *http.Request) {
@@ -352,8 +371,8 @@ func parsePagination(r *http.Request) (int32, int32) {
 	return limit, offset
 }
 
-func toRunResponse(run reconciliationdb.ReconciliationRun, items []reconciliationdb.ReconciliationItem) runResponse {
-	resp := runResponse{
+func toRunResponse(run reconciliationdb.ReconciliationRun) runResponse {
+	return runResponse{
 		ID:                   run.ID,
 		BankCode:             run.BankCode,
 		Currency:             run.Currency,
@@ -366,13 +385,17 @@ func toRunResponse(run reconciliationdb.ReconciliationRun, items []reconciliatio
 		DiscrepancyCount:     run.DiscrepancyCount,
 		CreatedAt:            run.CreatedAt,
 	}
-	if items != nil {
-		resp.Items = make([]itemResponse, 0, len(items))
-		for _, it := range items {
-			resp.Items = append(resp.Items, toItemResponse(it))
-		}
+}
+
+func toRunDetailResponse(run reconciliationdb.ReconciliationRun, items []reconciliationdb.ReconciliationItem) runDetailResponse {
+	outItems := make([]itemResponse, 0, len(items))
+	for _, it := range items {
+		outItems = append(outItems, toItemResponse(it))
 	}
-	return resp
+	return runDetailResponse{
+		runResponse: toRunResponse(run),
+		Items:       outItems,
+	}
 }
 
 func toItemResponse(it reconciliationdb.ReconciliationItem) itemResponse {

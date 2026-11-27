@@ -2,6 +2,7 @@ package reconciliation
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -14,6 +15,21 @@ import (
 	"github.com/BaoTrung37/FinCore/internal/modules/auth"
 	"github.com/go-chi/chi/v5"
 )
+
+func assertErrorCode(t *testing.T, body []byte, wantCode string) {
+	t.Helper()
+	var payload struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode error body %q: %v", string(body), err)
+	}
+	if payload.Error.Code != wantCode {
+		t.Fatalf("got error.code %q, want %q (body: %s)", payload.Error.Code, wantCode, string(body))
+	}
+}
 
 func newTestHandlerRouter(t *testing.T) (chi.Router, string) {
 	t.Helper()
@@ -42,20 +58,29 @@ func TestHandler_CreateRun_ValidationError(t *testing.T) {
 	r, token := newTestHandlerRouter(t)
 
 	cases := []struct {
-		name string
-		body string
+		name     string
+		body     string
+		wantCode string
 	}{
 		{
-			name: "invalid JSON",
-			body: "{bad",
+			name:     "invalid JSON",
+			body:     "{bad",
+			wantCode: "VALIDATION_ERROR",
 		},
 		{
-			name: "period_end before period_start",
-			body: `{"bank_code":"VCB","currency":"VND","period_start":"2026-11-27T10:00:00Z","period_end":"2026-11-27T09:00:00Z","records":[]}`,
+			name:     "period_end before period_start",
+			body:     `{"bank_code":"VCB","currency":"VND","period_start":"2026-11-27T10:00:00Z","period_end":"2026-11-27T09:00:00Z","records":[]}`,
+			wantCode: "VALIDATION_ERROR",
 		},
 		{
-			name: "unsupported currency",
-			body: `{"bank_code":"VCB","currency":"EUR","period_start":"2026-11-27T08:00:00Z","period_end":"2026-11-27T10:00:00Z","records":[]}`,
+			name:     "unsupported currency",
+			body:     `{"bank_code":"VCB","currency":"EUR","period_start":"2026-11-27T08:00:00Z","period_end":"2026-11-27T10:00:00Z","records":[]}`,
+			wantCode: "VALIDATION_ERROR",
+		},
+		{
+			name:     "duplicate external_ref",
+			body:     `{"bank_code":"VCB","currency":"vnd","period_start":"2026-11-27T08:00:00Z","period_end":"2026-11-27T10:00:00Z","records":[{"external_ref":"R1","direction":"deposit","amount":1000,"currency":"VND","status":"completed"},{"external_ref":"R1","direction":"deposit","amount":1000,"currency":"VND","status":"completed"}]}`,
+			wantCode: "DUPLICATE_EXTERNAL_REF",
 		},
 	}
 
@@ -69,6 +94,7 @@ func TestHandler_CreateRun_ValidationError(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 			}
+			assertErrorCode(t, rec.Body.Bytes(), tc.wantCode)
 		})
 	}
 }

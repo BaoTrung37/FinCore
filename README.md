@@ -56,6 +56,10 @@ make test-integration
   - External bank statement reconciliation via JSON & CSV (`POST /api/v1/reconciliation/runs`, `POST /api/v1/reconciliation/runs/csv`, `GET /api/v1/reconciliation/runs`, `GET /api/v1/reconciliation/runs/{id}`)
   - Discrepancy resolution workflow (`PATCH /api/v1/reconciliation/runs/{id}/items/{item_id}`)
   - Internal double-entry & balance-drift ledger integrity audit (`POST /api/v1/reconciliation/ledger-audit`, `GET /api/v1/reconciliation/ledger-audit`) with transactional outbox notifications
+- **M7 — Production Readiness, Observability & Deployments (`feat/m7-production-readiness`):**
+  - Prometheus exposition endpoint (`/metrics`) for HTTP request counts/latency histograms, uptime, and PostgreSQL pool stats
+  - Configurable CORS (`CORS_ALLOWED_ORIGINS`), per-IP token-bucket rate limiting (`RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`), and `-migrate-only` CLI flag
+  - Multi-stage `deployments/Dockerfile`, full-stack `compose.yaml` (`--profile app`), GitHub Actions CI (`.github/workflows/ci.yml`), and M5–M7 Postman collection
 
 ## Documentation
 

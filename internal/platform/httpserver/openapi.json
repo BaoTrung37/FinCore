@@ -441,6 +441,13 @@
         ],
         "responses": { "200": { "description": "OK" } }
       }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["Observability (M7)"],
+        "summary": "Prometheus text-format runtime, HTTP, and PostgreSQL pool metrics",
+        "responses": { "200": { "description": "Prometheus metrics (text/plain)" } }
+      }
     }
   }
 }

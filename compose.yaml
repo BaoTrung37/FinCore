@@ -21,5 +21,30 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+    container_name: fincore-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      HTTP_PORT: ${HTTP_PORT:-8080}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      MOCK_BANK_WEBHOOK_SECRET: ${MOCK_BANK_WEBHOOK_SECRET:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+
 volumes:
   postgres_data:
