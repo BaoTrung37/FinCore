@@ -1,0 +1,313 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "FinCore API",
+    "version": "1.0.0",
+    "description": "Modular Monolith banking backend in Go (M1-M5): Auth, Accounts & Double-Entry Ledger, Atomic Transfers, Payments & Mock Bank, Transactional Outbox & Webhooks."
+  },
+  "servers": [
+    { "url": "/", "description": "Current host" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "VALIDATION_ERROR" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      },
+      "AuthRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "alice@example.com" },
+          "password": { "type": "string", "minLength": 8, "example": "StrongPass123!" }
+        }
+      },
+      "CreateAccountRequest": {
+        "type": "object",
+        "required": ["currency"],
+        "properties": {
+          "currency": { "type": "string", "enum": ["VND", "USD"], "example": "VND" }
+        }
+      },
+      "CreateTransferRequest": {
+        "type": "object",
+        "required": ["source_account_id", "destination_account_id", "amount", "currency"],
+        "properties": {
+          "source_account_id": { "type": "string", "format": "uuid" },
+          "destination_account_id": { "type": "string", "format": "uuid" },
+          "amount": { "type": "integer", "format": "int64", "example": 100000 },
+          "currency": { "type": "string", "enum": ["VND", "USD"], "example": "VND" }
+        }
+      },
+      "CreatePaymentRequest": {
+        "type": "object",
+        "required": ["account_id", "amount", "currency", "bank_code", "bank_account_number"],
+        "properties": {
+          "account_id": { "type": "string", "format": "uuid" },
+          "amount": { "type": "integer", "format": "int64", "example": 500000 },
+          "currency": { "type": "string", "enum": ["VND", "USD"], "example": "VND" },
+          "bank_code": { "type": "string", "example": "MOCK_VCB", "description": "Use MOCK_VCB for instant completion, MOCK_PENDING for async callback, MOCK_FAIL for failure" },
+          "bank_account_number": { "type": "string", "example": "1234567890" }
+        }
+      },
+      "MockBankCallbackRequest": {
+        "type": "object",
+        "required": ["external_ref", "status"],
+        "properties": {
+          "external_ref": { "type": "string" },
+          "status": { "type": "string", "enum": ["completed", "failed"] },
+          "failure_reason": { "type": "string" }
+        }
+      },
+      "CreateWebhookRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "format": "uri", "example": "https://webhook.site/your-id" },
+          "events": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["transfer.completed", "payment.completed"]
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": ["Platform"],
+        "summary": "Health check",
+        "responses": { "200": { "description": "Healthy" }, "503": { "description": "DB unavailable" } }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["Auth (M1)"],
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthRequest" } } }
+        },
+        "responses": { "201": { "description": "Created" }, "409": { "description": "Email exists" } }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Auth (M1)"],
+        "summary": "Login and receive JWT access_token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthRequest" } } }
+        },
+        "responses": { "200": { "description": "OK" }, "401": { "description": "Invalid credentials" } }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["Auth (M1)"],
+        "summary": "Get current authenticated user",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "OK" }, "401": { "description": "Unauthorized" } }
+      }
+    },
+    "/api/v1/accounts": {
+      "post": {
+        "tags": ["Accounts (M2)"],
+        "summary": "Create account",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateAccountRequest" } } }
+        },
+        "responses": { "201": { "description": "Created" } }
+      },
+      "get": {
+        "tags": ["Accounts (M2)"],
+        "summary": "List user accounts",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/accounts/{id}": {
+      "get": {
+        "tags": ["Accounts (M2)"],
+        "summary": "Get account by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/api/v1/accounts/{id}/freeze": {
+      "post": {
+        "tags": ["Accounts (M2)"],
+        "summary": "Freeze account",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/accounts/{id}/unfreeze": {
+      "post": {
+        "tags": ["Accounts (M2)"],
+        "summary": "Unfreeze account",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/accounts/{id}/balance": {
+      "get": {
+        "tags": ["Accounts (M2)"],
+        "summary": "Get account balance",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/accounts/{id}/transactions": {
+      "get": {
+        "tags": ["Accounts (M2)"],
+        "summary": "Get account ledger transactions",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/transfers": {
+      "post": {
+        "tags": ["Transfers (M3)"],
+        "summary": "Create internal transfer",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "example": "trf-001" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTransferRequest" } } }
+        },
+        "responses": { "201": { "description": "Created" }, "200": { "description": "Idempotent replay" }, "409": { "description": "Idempotency conflict" } }
+      }
+    },
+    "/api/v1/transfers/{id}": {
+      "get": {
+        "tags": ["Transfers (M3)"],
+        "summary": "Get transfer by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/api/v1/payments/deposits": {
+      "post": {
+        "tags": ["Payments (M4)"],
+        "summary": "Initiate deposit from mock bank",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "example": "dep-001" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreatePaymentRequest" } } }
+        },
+        "responses": { "201": { "description": "Created" }, "200": { "description": "Idempotent replay" } }
+      }
+    },
+    "/api/v1/payments/withdrawals": {
+      "post": {
+        "tags": ["Payments (M4)"],
+        "summary": "Initiate withdrawal to mock bank",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "example": "wdr-001" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreatePaymentRequest" } } }
+        },
+        "responses": { "201": { "description": "Created" }, "200": { "description": "Idempotent replay" } }
+      }
+    },
+    "/api/v1/payments": {
+      "get": {
+        "tags": ["Payments (M4)"],
+        "summary": "List user payments",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/payments/{id}": {
+      "get": {
+        "tags": ["Payments (M4)"],
+        "summary": "Get payment by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/api/v1/payments/callbacks/mock-bank": {
+      "post": {
+        "tags": ["Payments (M4)"],
+        "summary": "Mock bank settlement callback (HMAC signed)",
+        "parameters": [
+          { "name": "X-Mock-Bank-Signature", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MockBankCallbackRequest" } } }
+        },
+        "responses": { "200": { "description": "OK" }, "401": { "description": "Invalid signature" } }
+      }
+    },
+    "/api/v1/webhooks": {
+      "post": {
+        "tags": ["Webhooks (M5)"],
+        "summary": "Register a webhook endpoint",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateWebhookRequest" } } }
+        },
+        "responses": { "201": { "description": "Created (returns signing secret once)" } }
+      },
+      "get": {
+        "tags": ["Webhooks (M5)"],
+        "summary": "List active webhook endpoints",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/webhooks/{id}": {
+      "delete": {
+        "tags": ["Webhooks (M5)"],
+        "summary": "Deactivate a webhook endpoint",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
+      }
+    }
+  }
+}

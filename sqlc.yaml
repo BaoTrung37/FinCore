@@ -59,3 +59,18 @@ sql:
             go_type: "string"
           - db_type: "timestamptz"
             go_type: "time.Time"
+
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/modules/webhook/queries"
+    gen:
+      go:
+        package: "webhookdb"
+        out: "internal/modules/webhook/db"
+        sql_package: "pgx/v5"
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "timestamptz"
+            go_type: "time.Time"

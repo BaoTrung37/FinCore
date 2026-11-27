@@ -16,6 +16,7 @@ import (
 	"github.com/BaoTrung37/FinCore/internal/modules/ledger"
 	"github.com/BaoTrung37/FinCore/internal/modules/payment"
 	"github.com/BaoTrung37/FinCore/internal/modules/transfer"
+	"github.com/BaoTrung37/FinCore/internal/modules/webhook"
 	"github.com/BaoTrung37/FinCore/internal/platform/config"
 	"github.com/BaoTrung37/FinCore/internal/platform/database"
 	"github.com/BaoTrung37/FinCore/internal/platform/httpserver"
@@ -72,13 +73,22 @@ func run() error {
 	accHandler := account.NewHandler(accSvc, log, ledgerSvc)
 	accHandler.RegisterRoutes(router, tm)
 
+	webhookSvc := webhook.NewService(pool)
+	webhookHandler := webhook.NewHandler(webhookSvc, log)
+	webhookHandler.RegisterRoutes(router, tm)
+
 	transferSvc := transfer.NewService(pool, accSvc, ledgerSvc)
+	transferSvc.SetOutboxPublisher(webhookSvc)
 	transferHandler := transfer.NewHandler(transferSvc, log)
 	transferHandler.RegisterRoutes(router, tm)
 
 	paymentSvc := payment.NewService(pool, accSvc, ledgerSvc, payment.NewMockBankGateway())
+	paymentSvc.SetOutboxPublisher(webhookSvc)
 	paymentHandler := payment.NewHandler(paymentSvc, log, cfg.MockBankWebhookSecret)
 	paymentHandler.RegisterRoutes(router, tm)
+
+	relayWorker := webhook.NewRelayWorker(pool, log, 2*time.Second)
+	go relayWorker.Start(ctx)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,

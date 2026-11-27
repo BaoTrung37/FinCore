@@ -39,5 +39,7 @@ func NewRouter(log *slog.Logger, db HealthChecker) *chi.Mux {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	RegisterSwagger(r)
+
 	return r
 }

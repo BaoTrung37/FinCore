@@ -11,6 +11,7 @@ import (
 	"github.com/BaoTrung37/FinCore/internal/modules/account"
 	"github.com/BaoTrung37/FinCore/internal/modules/ledger"
 	paymentdb "github.com/BaoTrung37/FinCore/internal/modules/payment/db"
+	"github.com/BaoTrung37/FinCore/internal/modules/webhook"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -52,12 +53,18 @@ type BankCallbackInput struct {
 	FailureReason string
 }
 
+// OutboxPublisher persists domain events inside the active database transaction.
+type OutboxPublisher interface {
+	PublishTx(ctx context.Context, tx pgx.Tx, evt webhook.Event) error
+}
+
 // Service orchestrates external deposits, withdrawals, and bank settlement callbacks.
 type Service struct {
 	pool       *pgxpool.Pool
 	accountSvc *account.Service
 	ledgerSvc  *ledger.Service
 	gateway    BankGateway
+	outbox     OutboxPublisher
 }
 
 // NewService constructs a payment Service.
@@ -71,6 +78,11 @@ func NewService(pool *pgxpool.Pool, accountSvc *account.Service, ledgerSvc *ledg
 		ledgerSvc:  ledgerSvc,
 		gateway:    gateway,
 	}
+}
+
+// SetOutboxPublisher attaches an optional transactional outbox publisher.
+func (s *Service) SetOutboxPublisher(pub OutboxPublisher) {
+	s.outbox = pub
 }
 
 // ComputeRequestHash computes a canonical SHA-256 hex digest for idempotency payload comparison.
@@ -228,6 +240,18 @@ func (s *Service) initiate(ctx context.Context, direction string, in CreatePayme
 		return CreatePaymentResult{}, fmt.Errorf("create payment record: %w", err)
 	}
 
+	if (p.Status == "completed" || p.Status == "failed") && s.outbox != nil {
+		if err := s.outbox.PublishTx(ctx, tx, webhook.Event{
+			UserID:        p.UserID,
+			AggregateType: "payment",
+			AggregateID:   p.ID,
+			EventType:     "payment." + p.Status,
+			Payload:       p,
+		}); err != nil {
+			return CreatePaymentResult{}, err
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return CreatePaymentResult{}, fmt.Errorf("commit payment tx: %w", err)
 	}
@@ -292,6 +316,18 @@ func (s *Service) HandleBankCallback(ctx context.Context, in BankCallbackInput) 
 	})
 	if err != nil {
 		return paymentdb.Payment{}, fmt.Errorf("update payment status: %w", err)
+	}
+
+	if s.outbox != nil {
+		if err := s.outbox.PublishTx(ctx, tx, webhook.Event{
+			UserID:        updated.UserID,
+			AggregateType: "payment",
+			AggregateID:   updated.ID,
+			EventType:     "payment." + updated.Status,
+			Payload:       updated,
+		}); err != nil {
+			return paymentdb.Payment{}, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

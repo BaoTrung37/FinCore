@@ -12,6 +12,7 @@ Modular Monolith banking backend in Go (`net/http` + `chi`, PostgreSQL 17, `pgxp
   - `ledger` (M2) → owns `ledger_transactions`, `ledger_entries`
   - `transfer` (M3) → owns `transfers`
   - `payment` (M4) → owns `payments`
+  - `webhook` (M5) → owns `webhook_endpoints`, `outbox_events`
 - `migrations/`: Embedded SQL migrations (`embed.FS`, `golang-migrate/migrate/v4`).
 - `tests/integration/`: End-to-end tests against PostgreSQL (skip cleanly if DB unreachable).
 
