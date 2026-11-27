@@ -11,6 +11,7 @@ import (
 	"github.com/BaoTrung37/FinCore/internal/modules/account"
 	"github.com/BaoTrung37/FinCore/internal/modules/ledger"
 	transferdb "github.com/BaoTrung37/FinCore/internal/modules/transfer/db"
+	"github.com/BaoTrung37/FinCore/internal/modules/webhook"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -42,11 +43,17 @@ type CreateTransferResult struct {
 	Replayed bool
 }
 
+// OutboxPublisher persists domain events inside the active database transaction.
+type OutboxPublisher interface {
+	PublishTx(ctx context.Context, tx pgx.Tx, evt webhook.Event) error
+}
+
 // Service orchestrates atomic, idempotent internal transfers.
 type Service struct {
 	pool       *pgxpool.Pool
 	accountSvc *account.Service
 	ledgerSvc  *ledger.Service
+	outbox     OutboxPublisher
 }
 
 // NewService constructs a transfer Service.
@@ -56,6 +63,11 @@ func NewService(pool *pgxpool.Pool, accountSvc *account.Service, ledgerSvc *ledg
 		accountSvc: accountSvc,
 		ledgerSvc:  ledgerSvc,
 	}
+}
+
+// SetOutboxPublisher attaches an optional transactional outbox publisher.
+func (s *Service) SetOutboxPublisher(pub OutboxPublisher) {
+	s.outbox = pub
 }
 
 // ComputeRequestHash computes a canonical SHA-256 hex digest for idempotency payload comparison.
@@ -157,6 +169,18 @@ func (s *Service) CreateTransfer(ctx context.Context, in CreateTransferInput) (C
 			}
 		}
 		return CreateTransferResult{}, fmt.Errorf("create transfer record: %w", err)
+	}
+
+	if s.outbox != nil {
+		if err := s.outbox.PublishTx(ctx, tx, webhook.Event{
+			UserID:        in.UserID,
+			AggregateType: "transfer",
+			AggregateID:   tr.ID,
+			EventType:     "transfer.completed",
+			Payload:       tr,
+		}); err != nil {
+			return CreateTransferResult{}, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

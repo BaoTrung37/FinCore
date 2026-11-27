@@ -48,3 +48,11 @@ make test-integration
 - **M4 — Payments & Mock Bank Gateway (`feat/m4-payments`):**
   - Deposits & withdrawals (`POST /api/v1/payments/deposits`, `POST /api/v1/payments/withdrawals`, `GET /api/v1/payments`, `GET /api/v1/payments/{id}`)
   - Signed mock bank callback webhook (`POST /api/v1/payments/callbacks/mock-bank`)
+- **M5 — Transactional Outbox, Webhooks & API Docs (`feat/m5-outbox-webhooks`):**
+  - Webhook subscription management (`POST /api/v1/webhooks`, `GET /api/v1/webhooks`, `DELETE /api/v1/webhooks/{id}`)
+  - Transactional outbox (`outbox_events`) published atomically from transfers & payments, with `RelayWorker` (`FOR UPDATE SKIP LOCKED`, HMAC-SHA256 signing, exponential backoff)
+  - Embedded OpenAPI spec & Swagger UI (`/openapi.json`, `/swagger`)
+
+## Documentation
+
+- [Database ERD](docs/erd.md) — Entity-Relationship Diagram, module ownership, constraints, triggers, and indexes across all migrations.

@@ -69,3 +69,26 @@ func TestWriteError_Format(t *testing.T) {
 		t.Fatalf("unexpected error body: %+v", out)
 	}
 }
+
+func TestSwagger_Endpoints(t *testing.T) {
+	r := httpserver.NewRouter(slog.New(slog.NewJSONHandler(io.Discard, nil)), stubHealth{})
+
+	recSpec := httptest.NewRecorder()
+	r.ServeHTTP(recSpec, httptest.NewRequest(http.MethodGet, "/openapi.json", nil))
+	if recSpec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /openapi.json, got %d", recSpec.Code)
+	}
+	var spec map[string]any
+	if err := json.Unmarshal(recSpec.Body.Bytes(), &spec); err != nil {
+		t.Fatalf("invalid openapi.json: %v", err)
+	}
+	if spec["openapi"] != "3.0.3" {
+		t.Fatalf("unexpected openapi version: %v", spec["openapi"])
+	}
+
+	recUI := httptest.NewRecorder()
+	r.ServeHTTP(recUI, httptest.NewRequest(http.MethodGet, "/swagger", nil))
+	if recUI.Code != http.StatusOK || !strings.Contains(recUI.Body.String(), "SwaggerUIBundle") {
+		t.Fatalf("expected Swagger UI HTML, got code=%d", recUI.Code)
+	}
+}
