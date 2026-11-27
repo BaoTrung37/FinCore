@@ -1,6 +1,6 @@
 # FinCore — Database ERD
 
-Entity-Relationship Diagram for all PostgreSQL tables defined in `migrations/000001` through `migrations/000005`.
+Entity-Relationship Diagram for all PostgreSQL tables defined in `migrations/000001` through `migrations/000006`.
 
 ## Entity-Relationship Diagram
 
@@ -105,11 +105,63 @@ erDiagram
         timestamptz processed_at "NULLABLE"
     }
 
+    reconciliation_runs {
+        uuid id PK
+        uuid user_id FK "NOT NULL -> users.id"
+        text bank_code "NOT NULL"
+        char_3 currency "CHAR(3) VND | USD"
+        timestamptz period_start "NOT NULL"
+        timestamptz period_end "NOT NULL (>= period_start)"
+        text status "completed | has_discrepancies"
+        int total_bank_records "NOT NULL DEFAULT 0"
+        int total_internal_records "NOT NULL DEFAULT 0"
+        int matched_count "NOT NULL DEFAULT 0"
+        int discrepancy_count "NOT NULL DEFAULT 0"
+        timestamptz created_at "NOT NULL"
+    }
+
+    reconciliation_items {
+        uuid id PK
+        uuid run_id FK "NOT NULL -> reconciliation_runs.id ON DELETE CASCADE"
+        text external_ref "NOT NULL DEFAULT ''"
+        uuid payment_id FK "NULLABLE -> payments.id"
+        text match_status "matched | amount_mismatch | direction_mismatch | status_mismatch | missing_in_fincore | missing_in_bank"
+        bigint bank_amount "NULLABLE minor units"
+        bigint internal_amount "NULLABLE minor units"
+        text bank_direction "NOT NULL DEFAULT ''"
+        text internal_direction "NOT NULL DEFAULT ''"
+        text bank_status "NOT NULL DEFAULT ''"
+        text internal_status "NOT NULL DEFAULT ''"
+        char_3 currency "CHAR(3) VND | USD"
+        text resolution_status "not_applicable | open | resolved | ignored"
+        text resolution_note "NOT NULL DEFAULT ''"
+        uuid resolved_by FK "NULLABLE -> users.id"
+        timestamptz resolved_at "NULLABLE"
+        timestamptz created_at "NOT NULL"
+    }
+
+    ledger_audit_runs {
+        uuid id PK
+        uuid user_id FK "NOT NULL -> users.id"
+        text status "healthy | anomalies_found"
+        int checked_transactions "NOT NULL DEFAULT 0"
+        int unbalanced_transactions "NOT NULL DEFAULT 0"
+        int checked_accounts "NOT NULL DEFAULT 0"
+        int drifted_accounts "NOT NULL DEFAULT 0"
+        jsonb anomalies "NOT NULL DEFAULT []"
+        timestamptz created_at "NOT NULL"
+    }
+
     users ||--o{ accounts : "owns"
     users ||--o{ transfers : "initiates"
     users ||--o{ payments : "initiates"
     users ||--o{ webhook_endpoints : "configures"
     users ||--o{ outbox_events : "owns events"
+    users ||--o{ reconciliation_runs : "runs"
+    users ||--o{ ledger_audit_runs : "audits"
+
+    reconciliation_runs ||--|{ reconciliation_items : "contains"
+    payments ||--o{ reconciliation_items : "reconciled in"
 
     ledger_transactions ||--o| ledger_transactions : "reversed by"
     ledger_transactions ||--|{ ledger_entries : "contains (>= 2)"
@@ -135,6 +187,7 @@ Each domain module in `internal/modules/` owns writes to its respective tables:
 | `transfer` | `transfers` | `000003` | Idempotent internal account-to-account transfers |
 | `payment` | `payments` | `000004` | External bank deposits & withdrawals |
 | `webhook` | `webhook_endpoints`, `outbox_events` | `000005` | Transactional outbox & outbound webhook subscriptions |
+| `reconciliation` | `reconciliation_runs`, `reconciliation_items`, `ledger_audit_runs` | `000006` | Bank statement reconciliation & internal ledger integrity audits |
 
 ## Key Invariants, Constraints & Triggers
 
@@ -154,3 +207,6 @@ Each domain module in `internal/modules/` owns writes to its respective tables:
 - `payments`: `idx_payments_user_id (user_id)`, `idx_payments_account_id (account_id)`, `idx_payments_status (status)`
 - `webhook_endpoints`: `idx_webhook_endpoints_user_active (user_id) WHERE is_active = TRUE`
 - `outbox_events`: `idx_outbox_events_pending (next_retry_at, created_at) WHERE status = 'pending'`
+- `reconciliation_runs`: `idx_reconciliation_runs_user_id (user_id, created_at DESC)`
+- `reconciliation_items`: `idx_reconciliation_items_run_id (run_id, match_status)`
+- `ledger_audit_runs`: `idx_ledger_audit_runs_user_id (user_id, created_at DESC)`

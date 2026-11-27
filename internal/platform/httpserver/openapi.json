@@ -308,6 +308,139 @@
         "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
         "responses": { "204": { "description": "Deleted" }, "404": { "description": "Not found" } }
       }
+    },
+    "/api/v1/reconciliation/runs": {
+      "post": {
+        "tags": ["Reconciliation (M6)"],
+        "summary": "Run bank statement reconciliation from JSON payload",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["bank_code", "currency", "period_start", "period_end", "records"],
+                "properties": {
+                  "bank_code": { "type": "string", "example": "VCB" },
+                  "currency": { "type": "string", "enum": ["VND", "USD"] },
+                  "period_start": { "type": "string", "format": "date-time" },
+                  "period_end": { "type": "string", "format": "date-time" },
+                  "records": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["external_ref", "direction", "amount", "currency", "status"],
+                      "properties": {
+                        "external_ref": { "type": "string" },
+                        "direction": { "type": "string", "enum": ["deposit", "withdrawal"] },
+                        "amount": { "type": "integer", "format": "int64" },
+                        "currency": { "type": "string", "enum": ["VND", "USD"] },
+                        "status": { "type": "string", "enum": ["completed", "failed", "pending"] }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" }, "400": { "description": "Validation error" } }
+      },
+      "get": {
+        "tags": ["Reconciliation (M6)"],
+        "summary": "List bank reconciliation runs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/reconciliation/runs/csv": {
+      "post": {
+        "tags": ["Reconciliation (M6)"],
+        "summary": "Run bank statement reconciliation from CSV upload",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["bank_code", "currency", "period_start", "period_end", "file"],
+                "properties": {
+                  "bank_code": { "type": "string" },
+                  "currency": { "type": "string", "enum": ["VND", "USD"] },
+                  "period_start": { "type": "string", "format": "date-time" },
+                  "period_end": { "type": "string", "format": "date-time" },
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Created" }, "400": { "description": "Validation error" }, "413": { "description": "Payload too large" } }
+      }
+    },
+    "/api/v1/reconciliation/runs/{id}": {
+      "get": {
+        "tags": ["Reconciliation (M6)"],
+        "summary": "Get reconciliation run details and items",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "match_status", "in": "query", "schema": { "type": "string" } },
+          { "name": "resolution_status", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "OK" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/api/v1/reconciliation/runs/{id}/items/{item_id}": {
+      "patch": {
+        "tags": ["Reconciliation (M6)"],
+        "summary": "Resolve or ignore an open reconciliation discrepancy",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["resolution_status", "resolution_note"],
+                "properties": {
+                  "resolution_status": { "type": "string", "enum": ["resolved", "ignored"] },
+                  "resolution_note": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "OK" }, "400": { "description": "Invalid resolution" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/api/v1/reconciliation/ledger-audit": {
+      "post": {
+        "tags": ["Reconciliation (M6)"],
+        "summary": "Run internal double-entry and balance-drift ledger audit",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Created" } }
+      },
+      "get": {
+        "tags": ["Reconciliation (M6)"],
+        "summary": "List internal ledger audit runs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
     }
   }
 }

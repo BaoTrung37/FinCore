@@ -15,6 +15,7 @@ import (
 	"github.com/BaoTrung37/FinCore/internal/modules/auth"
 	"github.com/BaoTrung37/FinCore/internal/modules/ledger"
 	"github.com/BaoTrung37/FinCore/internal/modules/payment"
+	"github.com/BaoTrung37/FinCore/internal/modules/reconciliation"
 	"github.com/BaoTrung37/FinCore/internal/modules/transfer"
 	"github.com/BaoTrung37/FinCore/internal/modules/webhook"
 	"github.com/BaoTrung37/FinCore/internal/platform/config"
@@ -86,6 +87,11 @@ func run() error {
 	paymentSvc.SetOutboxPublisher(webhookSvc)
 	paymentHandler := payment.NewHandler(paymentSvc, log, cfg.MockBankWebhookSecret)
 	paymentHandler.RegisterRoutes(router, tm)
+
+	reconSvc := reconciliation.NewService(pool)
+	reconSvc.SetOutboxPublisher(webhookSvc)
+	reconHandler := reconciliation.NewHandler(reconSvc, log)
+	reconHandler.RegisterRoutes(router, tm)
 
 	relayWorker := webhook.NewRelayWorker(pool, log, 2*time.Second)
 	go relayWorker.Start(ctx)
