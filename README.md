@@ -52,6 +52,10 @@ make test-integration
   - Webhook subscription management (`POST /api/v1/webhooks`, `GET /api/v1/webhooks`, `DELETE /api/v1/webhooks/{id}`)
   - Transactional outbox (`outbox_events`) published atomically from transfers & payments, with `RelayWorker` (`FOR UPDATE SKIP LOCKED`, HMAC-SHA256 signing, exponential backoff)
   - Embedded OpenAPI spec & Swagger UI (`/openapi.json`, `/swagger`)
+- **M6 — Reconciliation Engine (`feat/m6-backend`):**
+  - External bank statement reconciliation via JSON & CSV (`POST /api/v1/reconciliation/runs`, `POST /api/v1/reconciliation/runs/csv`, `GET /api/v1/reconciliation/runs`, `GET /api/v1/reconciliation/runs/{id}`)
+  - Discrepancy resolution workflow (`PATCH /api/v1/reconciliation/runs/{id}/items/{item_id}`)
+  - Internal double-entry & balance-drift ledger integrity audit (`POST /api/v1/reconciliation/ledger-audit`, `GET /api/v1/reconciliation/ledger-audit`) with transactional outbox notifications
 
 ## Documentation
 
